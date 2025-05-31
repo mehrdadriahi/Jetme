@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -47,7 +48,6 @@
   margin-bottom: 0 !important;
 }
 </style>
-
 <script>
   // Global expiration settings
   let defaultPhoneExpiration = 120;
@@ -73,6 +73,7 @@
       const now = new Date(); now.setHours(h, m, 0, 0);
       dinners.push({ name, table, timestamp: now.getTime() });
       closeDinnerModal(); renderWaitingListCards();
+  sortCalledSegments(waitingListData[tableName]);
     }
     function removeDinnerEntry(idx) { dinners.splice(idx, 1); renderWaitingListCards(); }
     
@@ -96,27 +97,36 @@ function openTableChangeModal() {
 }
 function updateToOptions() {
   const fromVal = document.getElementById("changeFromSelect").value;
-  const toSelect = document.getElementById("changeToSelect");
-  const all = ["T1", "T2", "T3", "T4", "T5", "T6"];
-  toSelect.innerHTML = '<option value="">Select Table</option>' +
-    all.filter(t => t !== fromVal).map(t => `<option value="${t}">${t}</option>`).join("");
+  const checkboxes = document.querySelectorAll("#changeToSelect input[type='checkbox']");
+  checkboxes.forEach(cb => {
+    cb.disabled = (cb.value === fromVal);
+    if (cb.value === fromVal) cb.checked = false;
+  });
 }
+
 function confirmTableChange() {
   const name = capitalizeName(document.getElementById("changePlayerInput").value.trim());
   const from = document.getElementById("changeFromSelect").value;
-  const to = document.getElementById("changeToSelect").value;
-  if (!name || !from || !to) {
+  const toCheckboxes = document.querySelectorAll("#changeToSelect input[type='checkbox']:checked");
+  const toOptions = Array.from(toCheckboxes).map(cb => cb.value);
+  if (!name || !from || toOptions.length === 0) {
     alert("All fields are required.");
     return;
   }
-  const changes = JSON.parse(localStorage.getItem("tableChanges")) || [];
-  changes.push({ name, from, to });
+
+  let changes = JSON.parse(localStorage.getItem("tableChanges")) || [];
+
+  // Remove any previous entry with same name and from
+  changes = changes.filter(c => !(c.name === name && c.from === from));
+
+  // Push new combined entry
+  changes.push({ name, from, to: toOptions });
+
   localStorage.setItem("tableChanges", JSON.stringify(changes));
   closeTableChangeModal();
   renderWaitingListCards();
-  updateDisplayWindow(); // keep external window updated
+  updateDisplayWindow();
 }
-
 
 function reorderPlayerPrompt(playerName, tableName) {
   const newPos = prompt("Enter new position in the list (1 = top):");
@@ -544,7 +554,6 @@ function filterWaitingListByType() {
   border-radius: 0.25rem;
 }
 </style>
-
 <script>
 // --- Auto‑generated helper stubs to prevent ReferenceErrors ---
 window.waitingLists = window.waitingLists || {};
@@ -562,7 +571,7 @@ function saveDrawResults() {
 <div class="nav-item" onclick="showTab('drawTab')">Draw</div>
 <div class="nav-item" onclick="showTab('lobbyTab')">Lobby</div>
 <div class="nav-item" onclick="showTab('waitingListManagerTab')">Waiting List Manager</div>
-  <div class="nav-item" onclick="showTab('historyTab')">📜 History</div>
+<div class="nav-item" onclick="showTab('historyTab')">📜 History</div>
 </nav>
 <div class="pt-16 w-full mx-auto p-6">
 <!-- Table Management Section -->
@@ -622,9 +631,9 @@ function saveDrawResults() {
 <option value="sms">💬 SMS</option>
 </select>
 <button class="bg-blue-500 text-white px-3 py-1 rounded btn-apple hover:bg-blue-700" onclick="displayWaitingList()">Display</button>
-    <button onclick="openSettingsModal()" title="Settings" class="bg-gray-500 text-white px-3 py-1 rounded btn-apple hover:bg-gray-600 ml-2">
+<button class="bg-gray-500 text-white px-3 py-1 rounded btn-apple hover:bg-gray-600 ml-2" onclick="openSettingsModal()" title="Settings">
       ⚙️<span class="ml-2">Settings</span>
-    </button>
+</button>
 </div>
 <div class="flex justify-between items-center mb-4">
 <div class="flex gap-4 flex-1">
@@ -635,35 +644,71 @@ function saveDrawResults() {
 <input class="px-2 py-1 border rounded w-32" id="waitingListSearch" oninput="searchWaitingList()" placeholder="🔍 Search..." type="text"/>
 </div>
 </div>
-<div class="flex gap-2 mb-4 flex-wrap" id="waitingListQuickButtons"></div>
-<div id="waitingListCards" class="grid grid-cols-2 gap-4">
+<div class="flex gap-4 mb-4 flex-wrap" id="waitingListQuickButtonsCheckboxes">
+<!-- Checkboxes for each waiting list will go here -->
+</div>
+<script>
+function renderWaitingListCheckboxes() {
+  const container = document.getElementById("waitingListQuickButtonsCheckboxes");
+  container.innerHTML = "";
+  const defaultTable = tables.find(t => t.default)?.name || "NLH 1/3";
+  tables.filter(t => t.active).forEach(t => {
+    const label = document.createElement("label");
+    label.className = "flex items-center space-x-2 text-sm bg-white px-2 py-1 rounded border";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = t.name;
+    checkbox.checked = (t.name === defaultTable);
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(t.name));
+    container.appendChild(label);
+  });
+
+  // Add "All" checkbox
+  const allLabel = document.createElement("label");
+  allLabel.className = "flex items-center space-x-2 text-sm bg-white px-2 py-1 rounded border";
+  const allCheckbox = document.createElement("input");
+  allCheckbox.type = "checkbox";
+  allCheckbox.value = "__ALL__";
+  allCheckbox.addEventListener("change", function() {
+    const allChecked = this.checked;
+    document.querySelectorAll('#waitingListQuickButtonsCheckboxes input[type="checkbox"]').forEach(cb => {
+      if (cb.value !== "__ALL__") cb.checked = allChecked;
+    });
+  });
+  allLabel.appendChild(allCheckbox);
+  allLabel.appendChild(document.createTextNode("All"));
+  container.appendChild(allLabel);
+
+}
+</script>
+<div class="grid grid-cols-2 gap-4" id="waitingListCards">
 <!-- Waiting list cards will be rendered here -->
 </div>
 </section>
-
 <!-- Transaction History Section -->
 <section class="tab" id="historyTab">
-  <h1 class="text-3xl font-bold mb-6">📜 Transaction History</h1>
-  <div class="mb-4 flex items-center gap-2">
-    <input type="text" id="historySearch" placeholder="🔍 Search..." class="flex-1 px-4 py-2 border rounded" oninput="renderHistoryTable()">
-    <select id="historyFilter" class="px-2 py-2 border rounded" onchange="historyFilterType=this.value; renderHistoryTable();">
-      <option value="all">All</option>
-    </select>
-  </div>
-  <div style="max-height:70vh; overflow:auto;">
-    <table id="historyTable" class="w-full text-sm border-collapse">
-      <thead class="bg-gray-200 sticky top-0">
-        <tr>
-          <th class="border p-1">ID</th>
-          <th class="border p-1">Player</th>
-          <th class="border p-1">Date</th>
-          <th class="border p-1">Time</th>
-          <th class="border p-1">Action</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+<h1 class="text-3xl font-bold mb-6">📜 Transaction History</h1>
+<div class="mb-4 flex items-center gap-2">
+<input class="flex-1 px-4 py-2 border rounded" id="historySearch" oninput="renderHistoryTable()" placeholder="🔍 Search..." type="text"/>
+<select class="px-2 py-2 border rounded" id="historyFilter" onchange="historyFilterType=this.value; renderHistoryTable();">
+<option value="all">All</option>
+</select>
+</div>
+<div style="max-height:70vh; overflow:auto;">
+<table class="w-full text-sm border-collapse" id="historyTable">
+<thead class="bg-gray-200 sticky top-0">
+<tr>
+<th class="border p-1">ID</th>
+<th class="border p-1">Player</th>
+<th class="border p-1">Date</th>
+<th class="border p-1">Time</th>
+<th class="border p-1">Action</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
 </section>
 </div>
 <!-- Modal for Players List -->
@@ -723,7 +768,7 @@ function saveDrawResults() {
 </div>
 <!-- New List Modal -->
 <div class="fixed inset-0 bg-black bg-opacity-50 hidden" id="newListModal">
-<div class=" top-1/2  transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg">
+<div class="top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg">
 <h3 class="text-lg font-bold mb-4">Add New List</h3>
 <div class="space-y-4">
 <div>
@@ -765,7 +810,7 @@ function saveDrawResults() {
       if (tabId === "playersTab") { renderQuickButtons(); renderPlayers(); }
       if (tabId === "drawTab") renderDraw();
       if (tabId === "lobbyTab") renderLobby();
-      if (tabId === "waitingListManagerTab") { renderWaitingListManagerTab(); }
+      if (tabId === "waitingListManagerTab") { renderWaitingListManagerTab(); renderWaitingListCheckboxes(); }
     }
     showTab("tablesTab");
     function saveTables() { localStorage.setItem("pokerTables", JSON.stringify(tables)); }
@@ -1447,6 +1492,7 @@ losers.forEach(p => {
     let waitingListData = JSON.parse(localStorage.getItem("pokerWaitingList")) || {};
     let waitingListBackup = null;
     let selectedWaitingListTable = null;
+let selectedWaitingListTables = [];
     let timerCheckInterval = null;
     function formatTime12Hour(date) {
       return date.toLocaleTimeString('en-US', {
@@ -1543,6 +1589,7 @@ losers.forEach(p => {
 let selectedRegType = "";
 let tempPlayerName = "";
 
+
 function openRegTypeModal() {
   const name = document.getElementById('waitingListInput').value.trim();
   if (!name) {
@@ -1551,6 +1598,17 @@ function openRegTypeModal() {
   }
   tempPlayerName = name;
   document.getElementById("regTypeModal").style.display = "flex";
+  const selectedBoxes = document.querySelectorAll('#waitingListQuickButtonsCheckboxes input[type="checkbox"]:checked');
+  
+selectedWaitingListTables = Array.from(selectedBoxes).map(cb => cb.value);
+if (selectedWaitingListTables.includes("__ALL__")) {
+  selectedWaitingListTables = tables.filter(t => t.active).map(t => t.name);
+}
+
+  if (selectedWaitingListTables.length === 0) {
+    selectedWaitingListTables = [tables.find(t => t.default)?.name || "NLH 1/3"];
+  }
+
   selectedRegType = "";
   document.getElementById("regTimeContainer").style.display = "none";
   document.getElementById("regTimeInput").value = new Date().toLocaleTimeString([], {
@@ -1574,18 +1632,51 @@ function selectRegType(type) {
   }
 }
 
+
 function confirmRegTypeSelection() {
-  if (!selectedRegType) {
-    alert("Please select a registration type.");
+  const name = capitalizeName(tempPlayerName.trim());
+  const type = selectedRegType;
+  let timestamp = Date.now();
+  let expiryTimestamp = null;
+  let timeDisplay = "";
+
+  if (!name || !type) {
+    alert("Please enter name and select type.");
     return;
   }
-  let timeInput = document.getElementById("regTimeInput").value.trim();
-  if ((selectedRegType === 'called' || selectedRegType === 'sms') && !timeInput) {
-    timeInput = getCurrentFormattedTime();
+
+  if (type === "called" || type === "sms") {
+    const timeStr = document.getElementById("regTimeInput").value.trim();
+    timestamp = parseTimeToMillis(timeStr) || Date.now();
+    expiryTimestamp = timestamp + defaultPhoneExpiration * 60 * 1000;
+    timeDisplay = parseAndFormatTime(timeStr);
   }
+
+  const selected = selectedWaitingListTables.length > 0
+    ? selectedWaitingListTables
+    : [tables.find(t => t.default)?.name || "NLH 1/3"];
+
+  selected.forEach(tbl => {
+    if (!waitingListData[tbl]) waitingListData[tbl] = [];
+    waitingListData[tbl].push({ name, type, timestamp, expiryTimestamp, timeDisplay });
+      if (type === "called" || type === "sms") {
+        sortCalledSegments(waitingListData[tbl]);
+      }
+  });
+
+  saveWaitingListData();
+  renderWaitingListCards();
+  updateDisplayWindow();
   closeRegTypeModal();
-  completeRegistration(timeInput, selectedRegType);
+  document.getElementById('waitingListInput').value = "";
+
+  // Reset checkboxes to default
+  const defaultTableName = tables.find(t => t.default)?.name || "NLH 1/3";
+  document.querySelectorAll('#waitingListQuickButtonsCheckboxes input[type="checkbox"]').forEach(cb => {
+    cb.checked = (cb.value === defaultTableName);
+  });
 }
+
     /* --- END NEW Modal Functions --- */
     /* Modify waiting list key and insert functions to open reg type modal */
     function handleWaitingListKey(event) {
@@ -1813,6 +1904,10 @@ if (!firstInpersonFound && reg.type === "inperson") {
 
   </div>
   <button onclick="changeToInPerson('${reg.name}')" title="Change to In Person">🙋‍♂️<span class="ml-2">change to in person</span></button>
+  <div class="track-container">
+    <button onclick="clonePlayer(this)" title="Clone">🧬<span class="ml-2">clone</span></button>
+    <div class="track-options clone-options hidden flex flex-row gap-2 overflow-x-auto whitespace-nowrap"></div>
+  </div>
       <div class="track-container">
         <button onclick="openTrackMenu(event, this)" title="track">📍<span class="ml-2">track</span></button>
         <div class="track-options hidden flex flex-row gap-2 overflow-x-auto whitespace-nowrap">
@@ -2327,9 +2422,14 @@ localStorage.removeItem("tableChanges");
 </div>
 <div>
 <label class="block mb-1">To:</label>
-<select class="w-full border rounded px-3 py-2" id="changeToSelect">
-<option value="">Select Table</option>
-</select>
+<div id="changeToSelect" style="display:flex; flex-wrap:wrap; gap:8px;">
+<label><input type="checkbox" value="T1"/> T1</label>
+<label><input type="checkbox" value="T2"/> T2</label>
+<label><input type="checkbox" value="T3"/> T3</label>
+<label><input type="checkbox" value="T4"/> T4</label>
+<label><input type="checkbox" value="T5"/> T5</label>
+<label><input type="checkbox" value="T6"/> T6</label>
+</div>
 </div>
 </div>
 <div class="mt-4 flex justify-end gap-2">
@@ -2338,64 +2438,59 @@ localStorage.removeItem("tableChanges");
 </div>
 </div>
 </div>
-
-  <!-- Dinner Entry Modal -->
-  <div id="dinnerEntryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white p-6 rounded-lg max-w-md w-full">
-      <h2 class="text-xl font-bold mb-4">Add Dinner Entry</h2>
-      <div class="space-y-4">
-        <div>
-          <label class="block mb-1">Name:</label>
-          <input id="dinnerNameInput" type="text" class="w-full border rounded px-2 py-1"/>
-        </div>
-        <div>
-          <label class="block mb-1">Table:</label>
-          <select id="dinnerTableSelect" class="w-full border rounded px-2 py-1">
-            <option value="">Select Table</option>
-            <option value="T1">T1</option>
-            <option value="T2">T2</option>
-            <option value="T3">T3</option>
-            <option value="T4">T4</option>
-            <option value="T5">T5</option>
-            <option value="T6">T6</option>
-          </select>
-        </div>
-        <div>
-          <label class="block mb-1">Time:</label>
-          <input id="dinnerTimeInput" type="time" class="w-full border rounded px-2 py-1"/>
-        </div>
-      </div>
-      <div class="flex justify-end gap-2">
-        <button class="px-4 py-2 bg-gray-200 rounded" onclick="closeDinnerModal()">Cancel</button>
-        <button class="px-4 py-2 bg-green-500 text-white rounded" onclick="confirmDinner()">Add</button>
-      </div>
-    </div>
-  </div>
-
-
-<!-- Settings Modal -->
-<div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-  <div class="bg-white rounded-lg max-w-md w-full p-6 relative">
-    <button class="absolute top-2 right-4 text-gray-600 text-xl font-bold hover:text-black" onclick="closeSettingsModal()">×</button>
-    <h2 class="text-2xl font-semibold mb-4">Settings</h2>
-    <div class="space-y-4">
-      <div>
-        <label class="block mb-1 text-sm font-medium">Phone call expiration time (min):</label>
-        <input id="settingsPhoneExp" type="number" min="1" class="w-full border rounded px-2 py-1" value="120"/>
-      </div>
-      <div>
-        <label class="block mb-1 text-sm font-medium">Dinner expiration time (min):</label>
-        <input id="settingsDinnerExp" type="number" min="1" class="w-full border rounded px-2 py-1" value="45"/>
-      </div>
-    </div>
-    <div class="mt-4 flex justify-end gap-2">
-      <button class="px-3 py-1 bg-gray-200 rounded" onclick="closeSettingsModal()">Cancel</button>
-      <button class="px-3 py-1 bg-blue-500 text-white rounded" onclick="confirmSettings()">Confirm</button>
-    </div>
-  </div>
+<!-- Dinner Entry Modal -->
+<div class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" id="dinnerEntryModal">
+<div class="bg-white p-6 rounded-lg max-w-md w-full">
+<h2 class="text-xl font-bold mb-4">Add Dinner Entry</h2>
+<div class="space-y-4">
+<div>
+<label class="block mb-1">Name:</label>
+<input class="w-full border rounded px-2 py-1" id="dinnerNameInput" type="text"/>
 </div>
-
-
+<div>
+<label class="block mb-1">Table:</label>
+<select class="w-full border rounded px-2 py-1" id="dinnerTableSelect">
+<option value="">Select Table</option>
+<option value="T1">T1</option>
+<option value="T2">T2</option>
+<option value="T3">T3</option>
+<option value="T4">T4</option>
+<option value="T5">T5</option>
+<option value="T6">T6</option>
+</select>
+</div>
+<div>
+<label class="block mb-1">Time:</label>
+<input class="w-full border rounded px-2 py-1" id="dinnerTimeInput" type="time"/>
+</div>
+</div>
+<div class="flex justify-end gap-2">
+<button class="px-4 py-2 bg-gray-200 rounded" onclick="closeDinnerModal()">Cancel</button>
+<button class="px-4 py-2 bg-green-500 text-white rounded" onclick="confirmDinner()">Add</button>
+</div>
+</div>
+</div>
+<!-- Settings Modal -->
+<div class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" id="settingsModal">
+<div class="bg-white rounded-lg max-w-md w-full p-6 relative">
+<button class="absolute top-2 right-4 text-gray-600 text-xl font-bold hover:text-black" onclick="closeSettingsModal()">×</button>
+<h2 class="text-2xl font-semibold mb-4">Settings</h2>
+<div class="space-y-4">
+<div>
+<label class="block mb-1 text-sm font-medium">Phone call expiration time (min):</label>
+<input class="w-full border rounded px-2 py-1" id="settingsPhoneExp" min="1" type="number" value="120"/>
+</div>
+<div>
+<label class="block mb-1 text-sm font-medium">Dinner expiration time (min):</label>
+<input class="w-full border rounded px-2 py-1" id="settingsDinnerExp" min="1" type="number" value="45"/>
+</div>
+</div>
+<div class="mt-4 flex justify-end gap-2">
+<button class="px-3 py-1 bg-gray-200 rounded" onclick="closeSettingsModal()">Cancel</button>
+<button class="px-3 py-1 bg-blue-500 text-white rounded" onclick="confirmSettings()">Confirm</button>
+</div>
+</div>
+</div>
 <script>
 /* ---- Transaction History Logic (500 record limit) ---- */
 let historyLogs = JSON.parse(localStorage.getItem("historyLogs") || "[]");
@@ -2522,7 +2617,6 @@ function renderHistoryTable(){
 document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('historyTab')) renderHistoryTable();
 });</script>
-
 <!-- Enhanced History Details -->
 <script>
 (function enhancedHistory(){
@@ -2637,6 +2731,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 })();</script>
-
 </body>
 </html>
+<script>
+function clonePlayer(button) {
+  event.stopPropagation();  // Prevent closing the menu on click
+
+  setTimeout(() => {
+    const container = button.nextElementSibling;
+    const alreadyOpen = !container.classList.contains("hidden");
+
+    // Close all others
+    document.querySelectorAll(".clone-options").forEach(opt => {
+      opt.classList.add("hidden");
+      opt.innerHTML = "";
+    });
+
+    if (alreadyOpen) return;
+
+    const entry = button.closest(".waiting-entry");
+    const name = entry?.getAttribute("data-regname");
+    const table = entry?.getAttribute("data-tablename");
+
+    if (!name || !table) return;
+
+    const playerData = waitingListData[table]?.find(p => p.name === name);
+    if (!playerData) return;
+
+    const options = tables?.filter(t => t.active && t.name !== table && !waitingListData[t.name]?.some(p => p.name === name));
+
+    options?.forEach(t => {
+      const btn = document.createElement("button");
+      btn.textContent = t.name;
+      btn.className = "bg-indigo-600 hover:bg-indigo-700 text-black font-bold text-xs px-3 py-1 rounded shadow";
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        if (!waitingListData[t.name]) waitingListData[t.name] = [];
+        waitingListData[t.name].push({ 
+          name: playerData.name,
+          type: playerData.type,
+          timestamp: playerData.timestamp,
+          expiryTimestamp: playerData.expiryTimestamp,
+          timeDisplay: playerData.timeDisplay
+        });
+        if (playerData.type === "called" || playerData.type === "sms") {
+          sortCalledSegments(waitingListData[t.name]);
+        }
+        saveWaitingListData();
+        renderWaitingListCards();
+        updateDisplayWindow();
+        container.innerHTML = "";
+        container.classList.add("hidden");
+      };
+      container.appendChild(btn);
+    });
+
+    if (options.length > 0) {
+      container.classList.remove("hidden");
+      container.classList.add("flex");
+    }
+  }, 50);
+}
+</script>
